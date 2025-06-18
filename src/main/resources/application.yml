@@ -2,6 +2,12 @@ spring:
   application:
     name: FitConnect
 
+jwt:
+  secret-key: your-super-strong-and-long-secret-key-for-fitconnect-project-42
+  access-token:
+    expiration-ms: 3600000 # 1 giờ
+  refresh-token:
+    expiration-ms: 604800000 # 7 ngày
 ---
 
 spring:
