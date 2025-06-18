@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -39,5 +41,17 @@ public class AuthController {
     public ResponseEntity<String> logout(@RequestBody LogoutRequest request) {
         authService.logout(request);
         return ResponseEntity.ok("Đăng xuất thành công.");
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<AuthResponse.UserDto> getMyAccount() {
+        var user = authService.getMyAccount();
+        return ResponseEntity.ok(user);
+    }
+
+    @GetMapping("/user/{id}")
+    public ResponseEntity<AuthResponse.UserDto> getUserAccount(@PathVariable UUID id) {
+        var user = authService.getUserAccount(id);
+        return ResponseEntity.ok(user);
     }
 }

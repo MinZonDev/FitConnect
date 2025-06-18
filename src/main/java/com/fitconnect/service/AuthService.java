@@ -13,9 +13,12 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -83,5 +86,40 @@ public class AuthService {
         // Thêm refreshToken vào một blocklist (ví dụ: Redis, DB)
         // TokenBlocklistService.blockToken(request.getRefreshToken());
         System.out.println("Token " + request.getRefreshToken() + " đã được thu hồi.");
+    }
+
+    public AuthResponse.UserDto getMyAccount() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        if ("anonymousUser".equals(principal)) {
+            throw new IllegalStateException("Người dùng chưa được xác thực.");
+        }
+
+        User user;
+        if (principal instanceof User) {
+            user = (User) principal;
+        } else if (principal instanceof String) {
+            String email = (String) principal;
+            user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với email: " + email));
+        } else {
+            throw new IllegalStateException("Principal không hợp lệ.");
+        }
+
+        return AuthResponse.UserDto.builder()
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .avatarUrl(user.getAvatarUrl())
+                .build();
+    }
+
+    public AuthResponse.UserDto getUserAccount(UUID id) {
+        var user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng."));
+        return AuthResponse.UserDto.builder()
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .avatarUrl(user.getAvatarUrl())
+                .build();
     }
 }
