@@ -32,11 +32,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String requestURI = request.getRequestURI();
 
-        // ✅ Đảm bảo bỏ qua filter cho tất cả các endpoint trong /api/v1/auth/
-        if (requestURI.startsWith("/api/v1/auth/")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+//        // ✅ Đảm bảo bỏ qua filter cho tất cả các endpoint trong /api/v1/auth/
+//        if (requestURI.startsWith("/api/v1/auth/")) {
+//            filterChain.doFilter(request, response);
+//            return;
+//        }
 
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
