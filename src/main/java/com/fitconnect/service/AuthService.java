@@ -30,6 +30,10 @@ import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import com.fitconnect.model.dto.ResetPasswordRequest;
+import com.fitconnect.model.entity.PasswordResetToken;
+import com.fitconnect.repository.PasswordResetTokenRepository;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +47,7 @@ public class AuthService {
     private final FirebaseStorageService firebaseStorageService; // Thêm service
     private final EmailService emailService; // Thêm service
     private final VerificationTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Transactional
     public void register(RegisterRequest request, MultipartFile avatarFile) throws IOException {
@@ -199,5 +204,45 @@ public class AuthService {
         verificationToken.setUser(user);
         verificationToken.setExpiryDate(LocalDateTime.now().plusMinutes(10)); // Hết hạn sau 10 phút
         tokenRepository.save(verificationToken);
+    }
+
+    @Transactional
+    public void createPasswordResetTokenForUser(String email) {
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        // Nếu không tìm thấy email, không làm gì cả để tránh lộ thông tin người dùng
+        if (userOptional.isEmpty()) {
+            return;
+        }
+
+        User user = userOptional.get();
+        String token = UUID.randomUUID().toString();
+        PasswordResetToken myToken = new PasswordResetToken();
+        myToken.setToken(token);
+        myToken.setUser(user);
+        myToken.setExpiryDate(LocalDateTime.now().plusHours(1)); // Token có hiệu lực trong 1 giờ
+        passwordResetTokenRepository.save(myToken);
+
+        emailService.sendPasswordResetEmail(user.getEmail(), token);
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalStateException("Mật khẩu xác nhận không khớp.");
+        }
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken())
+                .orElseThrow(() -> new RuntimeException("Token đặt lại mật khẩu không hợp lệ."));
+
+        if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Token đặt lại mật khẩu đã hết hạn.");
+        }
+
+        User user = resetToken.getUser();
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Xóa token sau khi đã sử dụng
+        passwordResetTokenRepository.delete(resetToken);
     }
 }

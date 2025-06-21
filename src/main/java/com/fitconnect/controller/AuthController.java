@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestParam;
+import com.fitconnect.model.dto.ResetPasswordRequest;
+import jakarta.validation.Valid;
 
 import java.util.UUID;
 
@@ -71,4 +73,22 @@ public class AuthController {
         var user = authService.getUserAccount(id);
         return ResponseEntity.ok(user);
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<String> forgotPassword(@RequestParam("email") String userEmail) {
+        authService.createPasswordResetTokenForUser(userEmail);
+        // Luôn trả về thông báo thành công chung chung để bảo mật, tránh email enumeration attack
+        return ResponseEntity.ok("Nếu tài khoản tồn tại, một email đặt lại mật khẩu đã được gửi đi.");
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        try {
+            authService.resetPassword(request);
+            return ResponseEntity.ok("Mật khẩu đã được đặt lại thành công.");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
 }
