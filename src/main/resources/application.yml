@@ -1,6 +1,17 @@
 spring:
   application:
     name: FitConnect
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: noreply.fitconnect.app@gmail.com # Email của bạn
+    password: yeym uadt cnka dhod # Mật khẩu ứng dụng hoặc mật khẩu email của bạn
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 jwt:
   secret-key: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5eg==
@@ -8,6 +19,15 @@ jwt:
     expiration-ms: 3600000 # 1 giờ
   refresh-token:
     expiration-ms: 604800000 # 7 ngày
+
+
+
+# Thêm cấu hình cho Firebase
+firebase:
+  service-account-file: "classpath:firebase-service-account-key.json"
+  # Đặt file key của bạn vào src/main/resources
+  storage-bucket-name: "fitconnect-d1801.firebasestorage.app" # Tên bucket trên Firebase Storage
+
 ---
 
 spring:

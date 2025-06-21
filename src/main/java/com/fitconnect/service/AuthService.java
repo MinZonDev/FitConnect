@@ -5,7 +5,10 @@ import com.fitconnect.model.dto.LoginRequest;
 import com.fitconnect.model.dto.LogoutRequest;
 import com.fitconnect.model.dto.RegisterRequest;
 import com.fitconnect.model.entity.User;
+import com.fitconnect.model.entity.UserStatus;
+import com.fitconnect.model.entity.VerificationToken;
 import com.fitconnect.repository.UserRepository;
+import com.fitconnect.repository.VerificationTokenRepository;
 import com.fitconnect.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
@@ -17,7 +20,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.security.SecureRandom;
+import java.text.DecimalFormat;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -28,12 +36,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    private final GeometryFactory geometryFactory; // Inject bean này
+    private final GeometryFactory geometryFactory;
+    private final FirebaseStorageService firebaseStorageService; // Thêm service
+    private final EmailService emailService; // Thêm service
+    private final VerificationTokenRepository tokenRepository;
 
     @Transactional
-    public void register(RegisterRequest request) {
+    public void register(RegisterRequest request, MultipartFile avatarFile) throws IOException {
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalStateException("Mật khẩu xác nhận không khớp.");
+        }
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalStateException("Email đã được sử dụng"); // Nên dùng custom exception
+            throw new IllegalStateException("Email đã được sử dụng");
         }
 
         User user = new User();
@@ -43,16 +57,24 @@ public class AuthService {
         user.setGender(request.getGender());
         user.setBirthDate(request.getBirthDate());
 
-        // Chuyển đổi DTO vị trí sang Point của JTS
-        if (request.getCurrentLocation() != null) {
-            Point point = geometryFactory.createPoint(new Coordinate(request.getCurrentLocation().getLongitude(), request.getCurrentLocation().getLatitude()));
-            point.setSRID(4326); // Set SRID cho WGS 84
-            user.setCurrentLocation(point);
+        // CẬP NHẬT TRẠNG THÁI
+        user.setStatus(UserStatus.ACTIVE);
+        user.setVerified(false); // Chưa xác thực
+
+        // Upload avatar nếu có
+        if (avatarFile != null && !avatarFile.isEmpty()) {
+            String avatarUrl = firebaseStorageService.uploadFile(avatarFile);
+            user.setAvatarUrl(avatarUrl);
         }
 
-        // Tạm thời bỏ qua fitnessGoalId, cần thêm logic để lấy FitnessGoal entity từ DB
+        // ... logic chuyển đổi vị trí ...
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // Tạo và gửi OTP
+        String otp = generateOtp();
+        createVerificationTokenForUser(savedUser, otp);
+        emailService.sendOtpEmail(savedUser.getEmail(), otp);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -121,5 +143,37 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .avatarUrl(user.getAvatarUrl())
                 .build();
+    }
+
+    @Transactional
+    public void verifyAccount(String email, String otp) {
+        VerificationToken token = tokenRepository.findByUser_Email(email)
+                .orElseThrow(() -> new RuntimeException("Email không hợp lệ hoặc chưa đăng ký."));
+
+        if (token.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Mã OTP đã hết hạn.");
+        }
+        if (!token.getToken().equals(otp)) {
+            throw new RuntimeException("Mã OTP không chính xác.");
+        }
+
+        User user = token.getUser();
+        user.setVerified(true);
+        userRepository.save(user);
+
+        // Xóa token sau khi đã xác thực thành công
+        tokenRepository.delete(token);
+    }
+
+    private String generateOtp() {
+        return new DecimalFormat("000000").format(new SecureRandom().nextInt(999999));
+    }
+
+    private void createVerificationTokenForUser(User user, String token) {
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setToken(token);
+        verificationToken.setUser(user);
+        verificationToken.setExpiryDate(LocalDateTime.now().plusMinutes(10)); // Hết hạn sau 10 phút
+        tokenRepository.save(verificationToken);
     }
 }

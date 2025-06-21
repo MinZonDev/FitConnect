@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.UUID;
 
@@ -19,16 +22,30 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    @PostMapping(value = "/register", consumes = {"multipart/form-data"})
+    public ResponseEntity<?> register(
+            @RequestPart("data") @Valid RegisterRequest request,
+            @RequestPart(value = "avatar", required = false) MultipartFile avatarFile
+    ) {
         try {
-            authService.register(request);
-            // Có thể trả về response chi tiết hơn
-            return ResponseEntity.status(HttpStatus.CREATED).body("Đăng ký thành công!");
+            authService.register(request, avatarFile);
+            return ResponseEntity.status(HttpStatus.CREATED).body("Đăng ký thành công! Vui lòng kiểm tra email để lấy mã OTP.");
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Dữ liệu không hợp lệ.");
+            // Log lỗi ra để debug
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Có lỗi xảy ra: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<String> verifyAccount(@RequestParam String email, @RequestParam String otp) {
+        try {
+            authService.verifyAccount(email, otp);
+            return ResponseEntity.ok("Xác thực tài khoản thành công!");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 

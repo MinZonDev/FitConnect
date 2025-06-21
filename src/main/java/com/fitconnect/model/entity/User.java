@@ -16,6 +16,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+
 
 @Getter
 @Setter
@@ -30,12 +33,19 @@ public class User implements UserDetails {
     @Column(unique = true, nullable = false, length = 255)
     private String email;
 
+    @Column(nullable = false, length = 255)
+    private String username; // Có thể dùng để đăng nhập thay cho email, nếu cần
+
+    @Column(nullable = true, length = 10)
+    private String phoneNumber; // Số điện thoại, có thể dùng để đăng nhập hoặc xác thực
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
+    @Lob
     @Column(name = "avatar_url")
     private String avatarUrl;
 
@@ -63,6 +73,13 @@ public class User implements UserDetails {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private ZonedDateTime updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status;
+
+    @Column(nullable = false)
+    private boolean verified;
 
     // --- CÁC MỐI QUAN HỆ (RELATIONSHIPS) ---
 
@@ -143,12 +160,8 @@ public class User implements UserDetails {
         return true;
     }
 
-    /**
-     * Cho biết người dùng có được kích hoạt hay không.
-     */
     @Override
     public boolean isEnabled() {
-        // Có thể trả về false nếu bạn có chức năng yêu cầu xác thực email
-        return true;
+        return this.status == UserStatus.ACTIVE && this.verified;
     }
 }
