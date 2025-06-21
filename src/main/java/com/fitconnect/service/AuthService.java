@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,7 +22,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.text.DecimalFormat;
@@ -77,17 +80,37 @@ public class AuthService {
         emailService.sendOtpEmail(savedUser.getEmail(), otp);
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        // 1. Tải thông tin người dùng trước để kiểm tra thủ công
+        User user = userRepository.findByEmail(request.getEmail())
+                // Nếu không tìm thấy email, ném lỗi sai thông tin đăng nhập
+                .orElseThrow(() -> new BadCredentialsException("Email hoặc mật khẩu không chính xác."));
 
-        var user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng."));
+        // 2. Kiểm tra xem tài khoản đã được xác thực chưa
+        if (!user.isVerified()) {
+            throw new DisabledException("Tài khoản chưa được xác thực. Vui lòng kiểm tra email để lấy mã OTP.");
+        }
 
+        // 3. Kiểm tra các trạng thái khác, ví dụ: tài khoản bị khóa
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new LockedException("Tài khoản của bạn đã bị khóa.");
+        }
+
+        // 4. Tiến hành xác thực bằng Spring Security để kiểm tra mật khẩu
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException e) {
+            // Nếu sai mật khẩu, ném lại ngoại lệ với thông điệp thống nhất
+            throw new BadCredentialsException("Email hoặc mật khẩu không chính xác.");
+        }
+
+        // 5. Nếu xác thực thành công, tạo token và trả về
         var accessToken = jwtService.generateToken(user);
         var refreshToken = jwtService.generateRefreshToken(user);
 
@@ -110,6 +133,7 @@ public class AuthService {
         System.out.println("Token " + request.getRefreshToken() + " đã được thu hồi.");
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse.UserDto getMyAccount() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 

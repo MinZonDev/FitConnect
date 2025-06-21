@@ -19,17 +19,17 @@ public class ApplicationConfig {
 
     private final UserRepository userRepository;
 
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return username -> userRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + username));
-    }
+//    @Bean
+//    public UserDetailsService userDetailsService() {
+//        return username -> userRepository.findByEmail(username)
+//                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + username));
+//    }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
+    public AuthenticationProvider authenticationProvider(UserDetailsService userDetailsService) {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService());
-        authProvider.setPasswordEncoder(passwordEncoder()); // Sử dụng PasswordEncoder ở dưới
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
 
